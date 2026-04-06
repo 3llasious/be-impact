@@ -1,4 +1,4 @@
-const { findcol } = require("./cleanData");
+const { findCol } = require("./cleanData");
 
 // Map the 6 numeric scoring columns to short aliases and extract quote fields
 // Calculate a composite score per row by averaging all available numeric scores

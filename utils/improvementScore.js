@@ -1,3 +1,5 @@
+const mean = require("./meanScore");
+
 // Sort sessions chronologically, split into first half and second half
 // improvement = late half average minus early half average
 // Positive = got better, negative = got worse

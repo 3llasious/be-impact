@@ -1,4 +1,10 @@
-const { parseCSV, findCol } = require("./utils/cleanData");
+const { parseCSV } = require("./utils/cleanData");
+const prepareRows = require("./utils/cleanScore");
+const groupByTrainer = require("./utils/trainerLookupObj");
+const isEligible = require("./utils/isEligible");
+const improvementScore = require("./utils/improvementScore");
+const getQuotes = require("./utils/getQuotes");
+const caseStudyAngle = require("./utils/caseStudyAngle");
 
 // ── n8n Code node — Most Improved Trainer Scout ──────────────────────────────
 // Input: $input.first().json.body.csv_text  (raw CSV string sent from Bubble)
