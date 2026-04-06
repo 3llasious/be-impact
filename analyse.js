@@ -6,27 +6,6 @@ const improvementScore = require("./utils/improvementScore");
 const getQuotes = require("./utils/getQuotes");
 const caseStudyAngle = require("./utils/caseStudyAngle");
 
-// ── n8n Code node — Most Improved Trainer Scout ──────────────────────────────
-// Input: $input.first().json.body.csv_text  (raw CSV string sent from Bubble)
-// Output: Top 2 most improved trainers as JSON
-
-// ── 1. PARSE CSV ─────────────────────────────────────────────────────────────
-
-// ── 2. COLUMN RESOLUTION ─────────────────────────────────────────────────────
-
-// ── 3. CLEAN & SCORE ROWS ────────────────────────────────────────────────────
-
-// ── 4. GROUP BY TRAINER ───────────────────────────────────────────────────────
-
-// ── 5. ELIGIBILITY FILTER ─────────────────────────────────────────────────────
-
-// ── 6. IMPROVEMENT SCORE ──────────────────────────────────────────────────────
-
-// ── 7. QUOTE SELECTION ────────────────────────────────────────────────────────
-
-// ── 9. MAIN ───────────────────────────────────────────────────────────────────
-
-// Grab the raw CSV string from the webhook payload sent by Bubble
 const fs = require("fs");
 const csvText = fs.readFileSync("case-study-data.csv", "utf8");
 
