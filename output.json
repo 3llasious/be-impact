@@ -1,0 +1,40 @@
+[
+  {
+    "trainer": "hayden.scott@org2.example.com",
+    "trainer_name": "Hayden Scott",
+    "n_sessions": 6,
+    "early_avg": 8.89,
+    "late_avg": 9.83,
+    "improvement_score": 0.94,
+    "quotes": [
+      {
+        "row_id": 9,
+        "quote": "Informal and fun, making everyone feel comfortable to ask questions and not feel stupid"
+      },
+      {
+        "row_id": 14,
+        "quote": "I think Hayden was very approachable and patient."
+      }
+    ],
+    "case_study_angle": "Hayden Scott improved consistently across sessions (+0.94 pts) — a credible growth arc that would resonate in a testimonial."
+  },
+  {
+    "trainer": "jamie.kim@org2.example.com",
+    "trainer_name": "Jamie Kim",
+    "n_sessions": 7,
+    "early_avg": 9.22,
+    "late_avg": 9.88,
+    "improvement_score": 0.65,
+    "quotes": [
+      {
+        "row_id": 10,
+        "quote": "Patient and lovely."
+      },
+      {
+        "row_id": 15,
+        "quote": "I think Jamie challenged me to try things on my own and figure it out rather than just giving me the answer."
+      }
+    ],
+    "case_study_angle": "Jamie Kim improved consistently across sessions (+0.65 pts) — a credible growth arc that would resonate in a testimonial."
+  }
+]
