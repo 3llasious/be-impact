@@ -1,5 +1,3 @@
-# be-impact
-
 # Most Improved Trainer Scout
 
 Hello Fabien, please see details of the CSV parser below.
@@ -13,6 +11,14 @@ npm start
 ```
 
 This runs `analyse.js` (the main controller file) against `case-study-data.csv` and writes the results to `output.json`.
+
+To run the test suite:
+
+```bash
+npm test
+```
+
+This runs all tests in `__tests__/tests.js` via Jest, covering every helper function in the pipeline.
 
 ---
 
