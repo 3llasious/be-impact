@@ -2,7 +2,13 @@ const caseStudyAngle = require("../utils/caseStudyAngle");
 const { parseCSV, findCol } = require("../utils/cleanData");
 const prepareRows = require("../utils/cleanScore");
 const getQuotes = require("../utils/getQuotes");
-const calculateMean = require("../utils/calculateMean");
+const calculateMean = require("../utils/meanScore");
+const isEligible = require("../utils/isEligible");
+const isValidQuote = require("../utils/isValidQuote");
+const truncate = require("../utils/shortenQuote");
+const splitLine = require("../utils/splitLine");
+const improvementScore = require("../utils/improvementScore");
+const groupByTrainer = require("../utils/trainerLookupObj");
 
 describe("caseStudyAngle", () => {
   describe("threshold boundaries", () => {
@@ -586,7 +592,6 @@ describe("improvementScore", () => {
 
   describe("odd number of sessions", () => {
     test("with 5 sessions the late half gets the extra session", () => {
-      // mid = floor(5/2) = 2, so early = [0,1], late = [2,3,4]
       const sessions = [
         makeSession("2025-01-01", 6),
         makeSession("2025-01-02", 6),
@@ -597,6 +602,420 @@ describe("improvementScore", () => {
       const result = improvementScore(sessions);
       expect(result.earlyAvg).toBe(6);
       expect(result.lateAvg).toBe(9);
+    });
+  });
+});
+
+describe("isEligible", () => {
+  const makeSession = (date) => ({ date: new Date(date) });
+
+  describe("session count cliff", () => {
+    test("returns false with fewer than 5 sessions", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-01-10"),
+        makeSession("2025-01-20"),
+        makeSession("2025-01-30"),
+      ];
+      expect(isEligible(sessions)).toBe(false);
+    });
+
+    test("returns false with exactly 4 sessions regardless of span", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-02-01"),
+        makeSession("2025-03-01"),
+        makeSession("2025-04-01"),
+      ];
+      expect(isEligible(sessions)).toBe(false);
+    });
+
+    test("does not return false on session count alone when count is 5 or more", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-01-10"),
+        makeSession("2025-01-20"),
+        makeSession("2025-01-30"),
+        makeSession("2025-02-10"),
+      ];
+      expect(isEligible(sessions)).toBe(true);
+    });
+  });
+
+  describe("day span cliff", () => {
+    test("returns false when span is less than 7 days", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-01-02"),
+        makeSession("2025-01-03"),
+        makeSession("2025-01-04"),
+        makeSession("2025-01-05"),
+      ];
+      expect(isEligible(sessions)).toBe(false);
+    });
+
+    test("returns false when span is exactly 6 days", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-01-02"),
+        makeSession("2025-01-03"),
+        makeSession("2025-01-04"),
+        makeSession("2025-01-05"),
+        makeSession("2025-01-07"),
+      ];
+      expect(isEligible(sessions)).toBe(false);
+    });
+
+    test("returns true when span is exactly 7 days", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-01-02"),
+        makeSession("2025-01-03"),
+        makeSession("2025-01-04"),
+        makeSession("2025-01-05"),
+        makeSession("2025-01-08"),
+      ];
+      expect(isEligible(sessions)).toBe(true);
+    });
+
+    test("returns true when span is well above 7 days", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-02-01"),
+        makeSession("2025-03-01"),
+        makeSession("2025-04-01"),
+        makeSession("2025-05-01"),
+      ];
+      expect(isEligible(sessions)).toBe(true);
+    });
+  });
+
+  describe("both cliffs must pass", () => {
+    test("returns false when count is met but span is not", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-01-02"),
+        makeSession("2025-01-03"),
+        makeSession("2025-01-04"),
+        makeSession("2025-01-05"),
+      ];
+      expect(isEligible(sessions)).toBe(false);
+    });
+
+    test("returns false when span is met but count is not", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-01-10"),
+        makeSession("2025-01-20"),
+        makeSession("2025-01-30"),
+      ];
+      expect(isEligible(sessions)).toBe(false);
+    });
+
+    test("returns true when both count and span are met", () => {
+      const sessions = [
+        makeSession("2025-01-01"),
+        makeSession("2025-01-05"),
+        makeSession("2025-01-10"),
+        makeSession("2025-01-15"),
+        makeSession("2025-01-20"),
+      ];
+      expect(isEligible(sessions)).toBe(true);
+    });
+  });
+
+  describe("date ordering", () => {
+    test("calculates span correctly when sessions are passed in unsorted order", () => {
+      const sessions = [
+        makeSession("2025-01-20"),
+        makeSession("2025-01-01"),
+        makeSession("2025-01-10"),
+        makeSession("2025-01-15"),
+        makeSession("2025-01-05"),
+      ];
+      expect(isEligible(sessions)).toBe(true);
+    });
+  });
+});
+
+describe("isValidQuote", () => {
+  describe("valid input", () => {
+    test("returns true for a normal quote string", () => {
+      expect(isValidQuote("Really enjoyed the session")).toBe(true);
+    });
+
+    test("returns true for a string with leading and trailing whitespace", () => {
+      expect(isValidQuote("  Great trainer  ")).toBe(true);
+    });
+
+    test("returns true for a single word", () => {
+      expect(isValidQuote("Excellent")).toBe(true);
+    });
+  });
+
+  describe("invalid — falsy values", () => {
+    test("returns false for null", () => {
+      expect(isValidQuote(null)).toBe(false);
+    });
+
+    test("returns false for undefined", () => {
+      expect(isValidQuote(undefined)).toBe(false);
+    });
+
+    test("returns false for an empty string", () => {
+      expect(isValidQuote("")).toBe(false);
+    });
+  });
+
+  describe("invalid — placeholder values", () => {
+    test("returns false for a dash", () => {
+      expect(isValidQuote("-")).toBe(false);
+    });
+
+    test("returns false for a dash with surrounding whitespace", () => {
+      expect(isValidQuote("  -  ")).toBe(false);
+    });
+
+    test("returns false for a whitespace-only string", () => {
+      expect(isValidQuote("   ")).toBe(false);
+    });
+  });
+
+  describe("invalid — nan string", () => {
+    test('returns false for the string "nan"', () => {
+      expect(isValidQuote("nan")).toBe(false);
+    });
+
+    test('returns false for "NaN" in uppercase', () => {
+      expect(isValidQuote("NaN")).toBe(false);
+    });
+
+    test('returns false for "NAN" in all caps', () => {
+      expect(isValidQuote("NAN")).toBe(false);
+    });
+
+    test('returns false for "nan" with surrounding whitespace', () => {
+      expect(isValidQuote("  nan  ")).toBe(false);
+    });
+  });
+});
+
+describe("truncate", () => {
+  const SHORT = "Short text.";
+  const EXACTLY_180 = "a".repeat(180);
+  const LONG_NO_SENTENCE = "a".repeat(250);
+
+  describe("no truncation needed", () => {
+    test("returns the string unchanged when it is under 180 chars", () => {
+      expect(truncate(SHORT)).toBe(SHORT);
+    });
+
+    test("returns the string unchanged when it is exactly 180 chars", () => {
+      expect(truncate(EXACTLY_180)).toBe(EXACTLY_180);
+    });
+  });
+
+  describe("sentence boundary cut", () => {
+    test("cuts at a full stop when one exists after position 80", () => {
+      // Full stop at position 100 — should cut there
+      const text = "a".repeat(100) + ". " + "b".repeat(150);
+      const result = truncate(text);
+      expect(result.endsWith(".")).toBe(true);
+      expect(result.length).toBeLessThanOrEqual(101);
+    });
+
+    test("includes the full stop in the result", () => {
+      const text = "a".repeat(100) + ". " + "b".repeat(150);
+      const result = truncate(text);
+      expect(result[result.length - 1]).toBe(".");
+    });
+
+    test("does not cut at a full stop that falls before position 80", () => {
+      // Full stop at position 50 — too early, should fall back to hard cut at 180
+      const text = "a".repeat(50) + ". " + "b".repeat(200);
+      const result = truncate(text);
+      expect(result.endsWith("…")).toBe(true);
+    });
+  });
+
+  describe("hard cut fallback", () => {
+    test("cuts at 180 chars and appends ellipsis when no valid sentence boundary exists", () => {
+      const result = truncate(LONG_NO_SENTENCE);
+      expect(result).toBe("a".repeat(180) + "…");
+    });
+
+    test("hard cut result is 181 chars — 180 content plus ellipsis character", () => {
+      const result = truncate(LONG_NO_SENTENCE);
+      expect(result.length).toBe(181);
+    });
+  });
+
+  describe("custom max", () => {
+    test("respects a custom max value", () => {
+      const text = "a".repeat(100);
+      const result = truncate(text, 50);
+      expect(result).toBe("a".repeat(50) + "…");
+    });
+
+    test("returns string unchanged when it is under the custom max", () => {
+      expect(truncate(SHORT, 50)).toBe(SHORT);
+    });
+  });
+});
+
+describe("splitLine", () => {
+  describe("basic splitting", () => {
+    test("splits a simple comma-separated line", () => {
+      expect(splitLine("a,b,c")).toEqual(["a", "b", "c"]);
+    });
+
+    test("returns a single-element array when there are no commas", () => {
+      expect(splitLine("hello")).toEqual(["hello"]);
+    });
+
+    test("returns an empty string element for an empty input", () => {
+      expect(splitLine("")).toEqual([""]);
+    });
+
+    test("handles a line with a trailing comma", () => {
+      expect(splitLine("a,b,")).toEqual(["a", "b", ""]);
+    });
+  });
+
+  describe("quoted fields", () => {
+    test("treats a comma inside quotes as part of the field, not a delimiter", () => {
+      expect(splitLine('"hello, world",foo')).toEqual(["hello, world", "foo"]);
+    });
+
+    test("handles multiple quoted fields with commas", () => {
+      expect(splitLine('"a, b","c, d"')).toEqual(["a, b", "c, d"]);
+    });
+
+    test("handles a mix of quoted and unquoted fields", () => {
+      expect(splitLine('plain,"quoted, value",plain2')).toEqual([
+        "plain",
+        "quoted, value",
+        "plain2",
+      ]);
+    });
+
+    test("strips the quote characters from the result", () => {
+      const result = splitLine('"hello"');
+      expect(result[0]).not.toContain('"');
+    });
+  });
+
+  describe("whitespace trimming", () => {
+    test("trims leading and trailing whitespace from each field", () => {
+      expect(splitLine("  a  ,  b  ")).toEqual(["a", "b"]);
+    });
+
+    test("trims whitespace from quoted fields", () => {
+      expect(splitLine('  "hello, world"  ,foo')).toEqual([
+        "hello, world",
+        "foo",
+      ]);
+    });
+  });
+
+  describe("non-breaking space normalisation", () => {
+    test("replaces non-breaking spaces (\\xa0) with regular spaces", () => {
+      const nonBreaking = "hello\xa0world";
+      const result = splitLine(nonBreaking);
+      expect(result[0]).toBe("hello world");
+    });
+
+    test("replaces non-breaking spaces inside quoted fields", () => {
+      const nonBreaking = '"hello\xa0world",foo';
+      const result = splitLine(nonBreaking);
+      expect(result[0]).toBe("hello world");
+    });
+  });
+});
+
+describe("groupByTrainer", () => {
+  const makeRow = (trainer, overrides = {}) => ({
+    trainer,
+    row_id: 1,
+    composite: 8,
+    ...overrides,
+  });
+
+  describe("output shape", () => {
+    test("returns an object", () => {
+      const result = groupByTrainer([makeRow("hayden@example.com")]);
+      expect(typeof result).toBe("object");
+      expect(Array.isArray(result)).toBe(false);
+    });
+
+    test("keys are trainer emails", () => {
+      const result = groupByTrainer([makeRow("hayden@example.com")]);
+      expect(Object.keys(result)).toContain("hayden@example.com");
+    });
+
+    test("values are arrays", () => {
+      const result = groupByTrainer([makeRow("hayden@example.com")]);
+      expect(Array.isArray(result["hayden@example.com"])).toBe(true);
+    });
+  });
+
+  describe("grouping behaviour", () => {
+    test("groups multiple rows for the same trainer under one key", () => {
+      const rows = [
+        makeRow("hayden@example.com", { row_id: 1 }),
+        makeRow("hayden@example.com", { row_id: 2 }),
+        makeRow("hayden@example.com", { row_id: 3 }),
+      ];
+      const result = groupByTrainer(rows);
+      expect(result["hayden@example.com"]).toHaveLength(3);
+    });
+
+    test("creates separate keys for different trainers", () => {
+      const rows = [
+        makeRow("hayden@example.com"),
+        makeRow("jamie@example.com"),
+      ];
+      const result = groupByTrainer(rows);
+      expect(Object.keys(result)).toHaveLength(2);
+      expect(result["hayden@example.com"]).toHaveLength(1);
+      expect(result["jamie@example.com"]).toHaveLength(1);
+    });
+
+    test("preserves the full row object under each trainer key", () => {
+      const row = makeRow("hayden@example.com", { row_id: 42, composite: 9.5 });
+      const result = groupByTrainer([row]);
+      expect(result["hayden@example.com"][0]).toEqual(row);
+    });
+
+    test("returns an empty object for an empty input array", () => {
+      expect(groupByTrainer([])).toEqual({});
+    });
+
+    test("handles a single row correctly", () => {
+      const result = groupByTrainer([
+        makeRow("hayden@example.com", { row_id: 1 }),
+      ]);
+      expect(result["hayden@example.com"]).toHaveLength(1);
+    });
+  });
+
+  describe("key accuracy", () => {
+    test("treats trainer emails as case sensitive keys", () => {
+      const rows = [
+        makeRow("Hayden@example.com"),
+        makeRow("hayden@example.com"),
+      ];
+      const result = groupByTrainer(rows);
+      expect(Object.keys(result)).toHaveLength(2);
+    });
+
+    test("does not merge trainers with similar but different emails", () => {
+      const rows = [
+        makeRow("hayden.scott@org1.example.com"),
+        makeRow("hayden.scott@org2.example.com"),
+      ];
+      const result = groupByTrainer(rows);
+      expect(Object.keys(result)).toHaveLength(2);
     });
   });
 });
