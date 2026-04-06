@@ -1,7 +1,7 @@
 // Reject empty, placeholder, or NaN string values
 function isValidQuote(text) {
+  if (!text) return false;
   return (
-    text &&
     text.trim() !== "" &&
     text.trim() !== "-" &&
     text.trim().toLowerCase() !== "nan"
