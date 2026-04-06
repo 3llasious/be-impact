@@ -1,4 +1,5 @@
 const isValidQuote = require("./isValidQuote");
+const truncate = require("./shortenQuote");
 
 // Pick the 2 best quotes from a trainer's highest-scoring sessions
 // Try q_liked (3.12) first — it's the most direct praise

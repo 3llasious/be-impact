@@ -1,5 +1,6 @@
 // Turn the raw CSV string into an array of row objects, one per line
 // Each row object has { row_id, column_name: value, ... }
+const splitLine = require("./splitLine");
 
 function parseCSV(raw) {
   if (!raw) throw new Error("CSV input is empty or undefined.");
@@ -24,4 +25,4 @@ function findCol(headers, prefix) {
   return headers.find((h) => h.startsWith(prefix));
 }
 
-module.export = { parseCSV, findCol };
+module.exports = { parseCSV, findCol };
