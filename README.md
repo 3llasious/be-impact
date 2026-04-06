@@ -4,6 +4,12 @@ Hello Fabien, please see details of the CSV parser below.
 
 ## Getting Started
 
+To install dependencies:
+
+```bash
+npm install
+```
+
 To run the script:
 
 ```bash
