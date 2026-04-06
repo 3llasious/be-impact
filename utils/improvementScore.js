@@ -1,4 +1,4 @@
-const mean = require("./meanScore");
+const calculateMean = require("./meanScore");
 
 // Sort sessions chronologically, split into first half and second half
 // improvement = late half average minus early half average
@@ -9,8 +9,8 @@ function improvementScore(sessions) {
   const early = sorted.slice(0, mid);
   const late = sorted.slice(mid);
 
-  const earlyAvg = mean(early.map((s) => s.composite));
-  const lateAvg = mean(late.map((s) => s.composite));
+  const earlyAvg = calculateMean(early.map((s) => s.composite));
+  const lateAvg = calculateMean(late.map((s) => s.composite));
 
   return {
     earlyAvg: Math.round(earlyAvg * 100) / 100,
