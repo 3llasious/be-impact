@@ -79,3 +79,12 @@ Picks 2 quotes per trainer from their highest-scoring sessions. Tries the `3.12`
 - `improvement_score`
 - `quotes` (2 quotes, each with `row_id` and `quote` text)
 - `case_study_angle` (one-line pitch for why be/impact should reach out)
+
+## Future Scalability
+
+Current version is a script you have to run first by saving your csv as case-study-data.csv then running npm start.
+For future robustness and to integrate properly into tooling I reccomend the flow below.
+
+Bubble → n8n webhook → calls Express server endpoint (hosted on render) → returns Top 2 JSON → n8n → Bubble
+
+## Reflections
