@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voice Blob</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: #060608;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        gap: 24px;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+        color: #fff;
+      }
+
+      canvas { cursor: pointer; display: block; }
+
+      .status-row { display: flex; align-items: center; gap: 10px; }
+
+      #status-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #3a3a3a;
+        transition: background 0.4s, box-shadow 0.4s;
+        flex-shrink: 0;
+      }
+
+      #status-dot.is-active {
+        background: #30d158;
+        box-shadow: 0 0 8px #30d158, 0 0 20px rgba(48, 209, 88, 0.4);
+      }
+
+      #status-dot.is-error {
+        background: #ff375f;
+        box-shadow: 0 0 8px #ff375f;
+      }
+
+      #status-text { font-size: 14px; color: rgba(255, 255, 255, 0.45); }
+      .hint-text   { font-size: 12px; color: rgba(255, 255, 255, 0.2); }
+    </style>
+  </head>
+  <body>
+    <canvas id="blob-canvas"></canvas>
+    <div class="status-row">
+      <div id="status-dot"></div>
+      <span id="status-text">Click to enable microphone</span>
+    </div>
+    <span class="hint-text">Requires microphone permission — works on localhost or HTTPS</span>
+
+    <script>
+      const CANVAS_SIZE    = 600;
+      const DPR            = Math.min(window.devicePixelRatio || 1, 2);
+      const CENTER         = CANVAS_SIZE / 2;
+      const BASE_RADIUS    = 130;
+      const NUM_POINTS     = 256;
+
+      const SPEECH_BIN_START   = 3;
+      const SPEECH_BIN_END     = 40;
+      const FFT_SIZE           = 512;
+      const ANALYSER_SMOOTHING = 0.5;
+      const FAST_SMOOTH_WEIGHT = 0.2;
+      const SLOW_SMOOTH_WEIGHT = 0.35;
+
+      // Layered harmonics that give the blob its organic shape
+      const harmonics = [
+        { freq: 2,  amplitude: 6, speed: 0.005, phase: 3.10 },
+        { freq: 3,  amplitude: 5, speed: 0.008, phase: 0.00 },
+        { freq: 5,  amplitude: 3, speed: 0.013, phase: 1.20 },
+        { freq: 7,  amplitude: 2, speed: 0.019, phase: 2.40 },
+        { freq: 11, amplitude: 1, speed: 0.027, phase: 0.80 },
+      ];
+
+      // Extra harmonic that kicks in with audio
+      const audioHarmonic = { freq: 6, speed: 0.035, phase: 1.8 };
+
+      // Colour palette — cycles smoothly over time
+      const palette = [
+        [10,  132, 255],
+        [191,  90, 242],
+        [48,  209,  88],
+        [255,  55,  95],
+        [90,  200, 250],
+      ];
+
+      let analyserNode      = null;
+      let freqBins          = null;
+      let fastLevel         = 0;
+      let smoothLevel       = 0;
+      let tick              = 0;
+
+      const canvas     = document.getElementById('blob-canvas');
+      const ctx        = canvas.getContext('2d');
+      const statusDot  = document.getElementById('status-dot');
+      const statusText = document.getElementById('status-text');
+
+      function setupCanvas() {
+        canvas.width        = CANVAS_SIZE * DPR;
+        canvas.height       = CANVAS_SIZE * DPR;
+        canvas.style.width  = CANVAS_SIZE + 'px';
+        canvas.style.height = CANVAS_SIZE + 'px';
+        ctx.scale(DPR, DPR);
+      }
+
+      function getSpeechAverage() {
+        if (!analyserNode) return 0;
+        analyserNode.getByteFrequencyData(freqBins);
+        let sum = 0;
+        for (let i = SPEECH_BIN_START; i < SPEECH_BIN_END; i++) sum += freqBins[i];
+        return sum / ((SPEECH_BIN_END - SPEECH_BIN_START) * 255);
+      }
+
+      function smoothAudio(raw) {
+        fastLevel   = fastLevel   * (1 - FAST_SMOOTH_WEIGHT) + raw       * FAST_SMOOTH_WEIGHT;
+        smoothLevel = smoothLevel * (1 - SLOW_SMOOTH_WEIGHT) + fastLevel  * SLOW_SMOOTH_WEIGHT;
+      }
+
+      function lerpColour(a, b, t) {
+        return [
+          Math.round(a[0] + (b[0] - a[0]) * t),
+          Math.round(a[1] + (b[1] - a[1]) * t),
+          Math.round(a[2] + (b[2] - a[2]) * t),
+        ];
+      }
+
+      // Returns an RGB array at a normalised position in the animated palette cycle
+      function paletteColour(offset) {
+        const t      = ((tick * 0.003) + offset) % 1;
+        const scaled = t * palette.length;
+        const idx    = Math.floor(scaled) % palette.length;
+        return lerpColour(palette[idx], palette[(idx + 1) % palette.length], scaled - Math.floor(scaled));
+      }
+
+      function radiusAt(angle) {
+        let r = BASE_RADIUS;
+        // Use fastLevel (less smoothed) so transient jolts visibly deform the shape
+        const audioBoost = 1 + fastLevel * 6;
+        for (const h of harmonics) {
+          r += h.amplitude * audioBoost * Math.sin(h.freq * angle + tick * h.speed + h.phase);
+        }
+        r += fastLevel * 140 * Math.sin(audioHarmonic.freq * angle + tick * audioHarmonic.speed + audioHarmonic.phase);
+        r += fastLevel * 60; // uniform swell driven by transients
+        return r;
+      }
+
+      function drawBlob() {
+        ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+        const inner = paletteColour(0);
+        const mid   = paletteColour(0.4);
+        const glow  = paletteColour(0.2);
+
+        // Build the blob path from polar samples
+        ctx.beginPath();
+        for (let i = 0; i <= NUM_POINTS; i++) {
+          const angle = (i / NUM_POINTS) * Math.PI * 2;
+          const r     = radiusAt(angle);
+          const x     = CENTER + Math.cos(angle) * r;
+          const y     = CENTER + Math.sin(angle) * r;
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        const glowRadius = BASE_RADIUS + 100 + smoothLevel * 140;
+        const grad = ctx.createRadialGradient(CENTER, CENTER, 0, CENTER, CENTER, glowRadius);
+        grad.addColorStop(0,    `rgba(${inner.join(',')}, 0.95)`);
+        grad.addColorStop(0.45, `rgba(${mid.join(',')},   0.75)`);
+        grad.addColorStop(1,    `rgba(${glow.join(',')},  0.0)`);
+
+        // Glow pass
+        ctx.save();
+        ctx.shadowColor = `rgba(${glow.join(',')}, 0.85)`;
+        ctx.shadowBlur  = 50 + smoothLevel * 140;
+        ctx.fillStyle   = grad;
+        ctx.fill();
+        ctx.restore();
+
+        // Crisp fill pass on top
+        ctx.fillStyle = grad;
+        ctx.fill();
+      }
+
+      function renderFrame() {
+        smoothAudio(getSpeechAverage());
+        drawBlob();
+        tick++;
+        requestAnimationFrame(renderFrame);
+      }
+
+      async function startMic() {
+        if (analyserNode) return;
+        statusText.textContent = 'Requesting permission...';
+        try {
+          const stream   = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const source   = audioCtx.createMediaStreamSource(stream);
+          analyserNode   = audioCtx.createAnalyser();
+          analyserNode.fftSize               = FFT_SIZE;
+          analyserNode.smoothingTimeConstant = ANALYSER_SMOOTHING;
+          freqBins = new Uint8Array(analyserNode.frequencyBinCount);
+          source.connect(analyserNode);
+          statusText.textContent = 'Listening';
+          statusDot.className    = 'is-active';
+        } catch {
+          statusText.textContent = 'Microphone access denied';
+          statusDot.className    = 'is-error';
+        }
+      }
+
+      canvas.addEventListener('click', startMic);
+      setupCanvas();
+      renderFrame();
+    </script>
+  </body>
+</html>
